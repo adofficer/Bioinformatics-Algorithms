@@ -33,12 +33,12 @@ def get_json(gene, BASE_URL):
     try:
         api = urllib2.urlopen(BASE_URL + gene + '/expression/')
     except urllib2.URLError:
-        # print "Error connecting to API"
+        print "Error connecting to API"
         return
     try:
         js = json.load(api)
     except:
-        # print "Error reading JSON file"
+        print "Error reading JSON file"
         return
     
     api.close()
@@ -52,8 +52,6 @@ def read_json(js):
     """
     Parses the fpkm values from the gene JSONs and merges them into the growing
     dataframe
-    
-    
     """
 
     if js:
@@ -85,13 +83,15 @@ def read_json(js):
     if debug:
         print "Empty JSON file"
     return
+
+# Following code snippet used for pulling the data from the DeCoN API
 """
 list of MGI numbers from Loyal
 f = open('decon_ref_seqs/decon_master_gene_list')
 all_rna = pickle.load(f)
 f.close()
 
-# tests the whole thing and the interfaces between it
+# tests the whole JSON import functionality and the interfaces between it
 t = pd.concat([read_json(get_json(all_rna[i], BASE_URL)) for i in xrange(5)])
 assert len(t) == 3, "Final merging and function connecting going wrong, check all_rna"
 
@@ -101,16 +101,18 @@ assert get_json('Tle4', BASE_URL)[0] == {u'quant_status': u'OK', u'conf_hi': 263
 # tests the read_json function
 assert read_json(get_json('Tle4', BASE_URL)).E16_cpn.tolist() == [3.16099], "Error in the read_json function"
 
-for testing
+# for testing
 t = pd.concat([read_json(get_json(all_rna[i], BASE_URL)) for i in xrange(200)])')
 
-writes the data to a file
+# writes the data to a file, only done once
+# involves several tens of thousand queries to the DeCoN API
+# takes about two hours, NOT ADVISED TO RUN
 result = pd.concat([read_json(get_json(i, BASE_URL)) for i in all_rna])
 f = open('all_decon_data.pkl', 'w')
 pickle.dump(result, f)
 f.close()
 
-for reading the data back in
+# for reading the data back in from the .pkl file
 f = open('all_decon_data.pkl')
 result = pickle.load(f)
 f.close
@@ -146,9 +148,13 @@ def p_filt(df, min_p):
     
     return filt_df
 
-# used temporarily to merge the samples by common cell type, unused currently
+# used temporarily to merge the samples by common cell type
+# data munging from the format the API returns
 def merge_type(df):
+    # initialize growing dataframe
     merge = pd.DataFrame( columns = ['subcereb', 'cpn', 'corticothal'])
+
+    # subset by cell type
     sub = [x for x in list(df) if 'subcereb' in x]
     cpn = [x for x in list(df) if 'cpn' in x]
     cort = [x for x in list(df) if 'corticothal' in x]
@@ -157,6 +163,8 @@ def merge_type(df):
     cpn_mat = df[cpn]
     cort_mat = df[cort]
     
+    # takes average of all reads and merges into one row of data in the growing
+    # data frame
     for i in xrange(len(df)):
         t = pd.DataFrame([sub_mat[i:i+1].as_matrix().mean(),
                           cpn_mat[i:i+1].as_matrix().mean(),
@@ -173,18 +181,16 @@ results = pickle.load(f)
 f.close()
 
 this is the 0.05 filtered list on my local
-"""
 f = open("p0pt5.pkl")
 filt = pickle.load(f)
 f.close()
 t = filt[1:50]
 
-"""
 Genetic Algorithm:
 
 Randomly choose a starting set from the rows in df
 Evaluate the objective function for all of the entries in the set
-  Quantify how well the 12 samples are clustered into the 3 depths
+  Quantify how well the 12 samples are clustered into the 3 depths within the brain
   PCA then K-means and save which group they are in
   Score the groups, want penalties for unevenness and samples in wrong groups
 Choose the top n
@@ -236,7 +242,7 @@ def genet_alg(df, set_size, targ_max, top_n, mut_rate = 0.1, max_loop = 500):
         best = filt_poss(df, poss, top_n)
         this = max([x[1] for x in poss.values()])
         
-        # tests for convergence, no need looping more than we need to
+        # tests for convergence, no sense in looping more than we need to
         if last - this == 0:
             con += 1
             if con > (100.0 / mut_rate):
@@ -409,10 +415,8 @@ def genet_switch(df, best, mut_rate, top_n):
     
     return out
 
+# test the scoring function
 assert(score_clust([[u'E18_corticothal', u'E16_corticothal', u'E15_corticothal', u'P1_corticothal'], [u'E16_subcereb', u'E15_cpn', u'E15_subcereb', u'P1_subcereb', u'E18_subcereb'], [u'E18_cpn', u'P1_cpn', u'E16_cpn']]) == 85)
-
-# 100 loops takes about 5 seconds or 20 loops per second, 0.05 seconds per loop
-
 
 
 
@@ -530,62 +534,3 @@ def pca_vis_2d(df):
         ax.annotate(l, (forpca[:, 0][i], forpca[:, 1][i]))
     
     pass
-
-
-
-
-debug = False
-
-import qvalue
-def p_calc(df):
-    """
-    Filters the given dataframe by p-value, all lower than min_p are retained
-    
-    Not optimal workflow, ideally just add a column to subset by, but it works!
-    
-    Uses the f-test or one-way ANOVA to determine significance between 3 cell
-    types in the dataset
-    """
-
-    filt_df = np.zeros(len(df))
-    sub = [x for x in list(df) if 'subcereb' in x]
-    cpn = [x for x in list(df) if 'cpn' in x]
-    cort = [x for x in list(df) if 'corticothal' in x]
-    
-    for i in xrange(1, len(df)):
-        row = df[i - 1 : i]        
-
-        if max(row.stack().value_counts()) < 11 and not ('NaN' in row.as_matrix()):
-
-            filt_df[i] = f_oneway(row[sub].as_matrix()[0], 
-                                    row[cpn].as_matrix()[0],
-                                    row[cort].as_matrix()[0])[1]
-        else:
-            
-            filt_df[i] = 1.1
-            
-            if debug:
-                print row.T
-    
-    return filt_df[1:]
-
-
-def q_filt(df, min_q):
-    """
-    For some reason not returning p-values as it did before, flatter distribution
-    giving fewer q-values as a result
-    
-    Investigate more
-    
-    
-    """
-    
-    p_val = p_calc(df)
-    out_df = df[1:][pd.Series(p_val) <= 1.0]
-    p_val = p_val[pd.Series(p_val) <= 1.0]
-    
-    q_val = qvalue.estimate(p_val)
-    
-    out_df = out_df[pd.Series(q_val) < min_q]
-    
-    return out_df
