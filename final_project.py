@@ -1,6 +1,5 @@
 # Final Project
 
-import profile
 import numpy as np
 import pandas as pd
 import urllib2
@@ -18,15 +17,16 @@ from random import random, randint
 
 BASE_URL = 'http://decon.fas.harvard.edu/pyramidal/gene/' 
 
-###### DO NOT RUN WITH DEBUG = TRUE, WILL MAKE TONS OF PCA PLOTS ########
+###### DO NOT RUN WITH debug = True, WILL MAKE TONS OF PCA PLOTS ########
 debug = False
 
 
-def get_json(gene, BASE_URL):
+def get_json(gene, BASE_URL = BASE_URL):
 
     """
     Grabs expression level JSON of gene from the DeCoN API
-    
+    Input: gene name and optional URL base for API access
+    Output: returns a JSON from the given API corresponding to gene 'gene'
     Sensitive to API connection errors and JSON errors
     """
     
@@ -52,6 +52,9 @@ def read_json(js):
     """
     Parses the fpkm values from the gene JSONs and merges them into the growing
     dataframe
+    Input: loaded JSON from the DeCoN API
+    Output: Single-line pandas dataframe containing the parsed FPKM data from
+            the input JSON
     """
 
     if js:
@@ -85,6 +88,7 @@ def read_json(js):
     return
 
 # Following code snippet used for pulling the data from the DeCoN API
+# several test functions as well, used for above code
 """
 list of MGI numbers from Loyal
 f = open('decon_ref_seqs/decon_master_gene_list')
@@ -127,16 +131,25 @@ def p_filt(df, min_p):
     
     Uses the f-test or one-way ANOVA to determine significance between 3 cell
     types in the dataset
+    
+    Input: dataframe with columns containing the words 'subcereb', 'cpn' and 'corticothal'
+           with numerical values.
+    Output: Subset of input dataframe with an additional column corresponding to the 
+            p-value of a one-way ANOVA (f-test) if that value is to less than min_p
+    
     """
 
+    # initialize the output dataframe and save column names for sub, cpn and cort
     filt_df = df[1:2]
     sub = [x for x in list(df) if 'subcereb' in x]
     cpn = [x for x in list(df) if 'cpn' in x]
     cort = [x for x in list(df) if 'corticothal' in x]
     
+    # skip first row, as initialized this row is all 0's
     for i in xrange(2, len(df)):
         row = df[i - 1 : i]        
 
+        # interesting behavior with NaN's, dealing with this edge case
         if max(row.stack().value_counts()) < 11 and not ('NaN' in row.as_matrix()):
             
             if f_oneway(row[sub].as_matrix()[0], 
@@ -228,7 +241,7 @@ def genet_alg(df, set_size, targ_max, top_n, mut_rate = 0.1, max_loop = 500):
         print poss.keys()
     
     while this < targ_max and count <= max_loop and not is_converged:
-    # for i in xrange(10):
+
         # change up the dictionary, now because of the while statement
         if len(best) != 0:
             poss = genet_switch(df, best, mut_rate, top_n)
@@ -236,6 +249,7 @@ def genet_alg(df, set_size, targ_max, top_n, mut_rate = 0.1, max_loop = 500):
         # evaluate the scoring function for all entries in the set
         poss = eval_set(df, poss)
         
+        # save previous information to determine if converged
         last = max([x[1] for x in poss.values()])        
 
         # keep only the top n that are good enough and repeat
