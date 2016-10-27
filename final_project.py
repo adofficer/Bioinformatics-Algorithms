@@ -1,5 +1,3 @@
-# Final Project
-
 import numpy as np
 import pandas as pd
 import urllib2
