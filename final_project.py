@@ -259,7 +259,7 @@ def genet_alg(df, set_size, targ_max, top_n, mut_rate = 0.1, max_loop = 500):
         # tests for convergence, no sense in looping more than we need to
         if last - this == 0:
             con += 1
-            if con > (100.0 / mut_rate):
+            if con > (50.0 / mut_rate):
                 is_converged = True
         else:
             con = 0
